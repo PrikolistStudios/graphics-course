@@ -10,15 +10,26 @@
 #include <glm/vec3.hpp>
 
 PerlinNoiseGenerator::PerlinNoiseGenerator(const Params& params)
-  : params(params)
 {
+  convertParams(params);
 }
 
 void PerlinNoiseGenerator::init()
 {
+  params_buf = etna::get_context().createBuffer(
+    etna::Buffer::CreateInfo{
+      .size = sizeof(NoiseParams),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+      .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+      .name = "Perlin Noise Generator Parameters Buffer",
+    });
+
   etna::create_program("PerlinNoiseGenerator", {TERRAIN_SHADERS_ROOT "perlin.comp.glsl.spv"});
   pipeline = etna::get_context().getPipelineManager().createComputePipeline("PerlinNoiseGenerator", {});
   sampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "PerlinNoiseGenerator_sampler"});
+
+  storeBuffer();
 }
 
 void PerlinNoiseGenerator::render(vk::CommandBuffer cmd_buf, const etna::Image& target_image)
@@ -33,31 +44,52 @@ void PerlinNoiseGenerator::render(vk::CommandBuffer cmd_buf, const etna::Image& 
 
   auto computeInfo = etna::get_shader_program("PerlinNoiseGenerator");
   auto set = etna::create_descriptor_set(
-    computeInfo.getDescriptorLayoutId(0), cmd_buf, {etna::Binding{0, target_image.genBinding(sampler.get(), vk::ImageLayout::eGeneral)}});
+    computeInfo.getDescriptorLayoutId(0),
+    cmd_buf,
+    {etna::Binding{0, target_image.genBinding(sampler.get(), vk::ImageLayout::eGeneral)}, etna::Binding{1, params_buf.genBinding()}});
 
   cmd_buf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
 
   glm::uvec2 resolution = {target_image.getExtent().width, target_image.getExtent().height};
-  PushConstants pc = {
-    .resolution = resolution,
-    .invResolution = 1.0f / glm::vec2(resolution),
-    .octave_count = params.octave_count,
-    .lacunarity = params.lacunarity,
-    .gain = params.gain,
-    .seed = params.seed,
-    .faloff_start = params.faloff_start,
-    .faloff_end = params.faloff_end,
-  };
-  cmd_buf.pushConstants(pipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eCompute, 0, sizeof(pc), &pc);
+  if (resolution != params.resolution)
+  {
+    params.resolution = resolution;
+    params.invResolution = 1.0f / glm::vec2(resolution);
+
+    storeBuffer();
+  }
 
   etna::flush_barriers(cmd_buf);
 
-  cmd_buf.dispatch((resolution.x + 31) / 32, (resolution.y + 31) / 32, 1);
+  cmd_buf.dispatch((params.resolution.x + 31) / 32, (params.resolution.y + 31) / 32, 1);
+}
+
+void PerlinNoiseGenerator::convertParams(const Params& parameters)
+{
+  params.lacunarity = parameters.lacunarity;
+  params.octave_count = parameters.octave_count;
+  params.gain = parameters.gain;
+  params.seed = parameters.seed;
+  params.falloff_start = parameters.faloff_start;
+  params.falloff_end = parameters.faloff_end;
+}
+
+void PerlinNoiseGenerator::storeBuffer()
+{
+  std::memcpy(params_buf.data(), &params, sizeof(params));
 }
 
 etna::Image PerlinNoiseGenerator::createImage(glm::uvec2 resolution)
 {
+  if (resolution != params.resolution)
+  {
+    params.resolution = resolution;
+    params.invResolution = 1.0f / glm::vec2(resolution);
+
+    storeBuffer();
+  }
+
   return etna::get_context().createImage(
     {.extent = vk::Extent3D{resolution.x, resolution.y, 1u},
      .name = "perlin_noise",
@@ -65,7 +97,8 @@ etna::Image PerlinNoiseGenerator::createImage(glm::uvec2 resolution)
      .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc});
 }
 
-void PerlinNoiseGenerator::updateParams(const Params& parameters)
+void PerlinNoiseGenerator::update(const Params& parameters)
 {
-  this->params = parameters;
+  convertParams(parameters);
+  storeBuffer();
 }

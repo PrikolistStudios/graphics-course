@@ -1,22 +1,30 @@
 #version 430
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : require
 
 // Hand-made perlin noise.
+
+#include "NoiseParams.h"
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
 layout(set = 0, binding = 0, r32f) uniform image2D resultImage;
 
-layout(push_constant) uniform PushConstants
-{
-  uvec2 resolution;
-  vec2 invResolution;
-  uint octave_count;
-  float lacunarity;
-  float gain;
-  uint seed;
-  float falloff_start;
-  float faloff_end;
-} pc;
+layout(set = 0, binding = 1) uniform NoiseData {
+  NoiseParams pc;
+};
+
+//layout(push_constant) uniform PushConstants
+//{
+//  uvec2 resolution;
+//  vec2 invResolution;
+//  uint octave_count;
+//  float lacunarity;
+//  float gain;
+//  uint seed;
+//  float falloff_start;
+//  float faloff_end;
+//} pc;
 
 const float noise_normalizer = sqrt(3.0) / 2.0;
 
@@ -128,7 +136,7 @@ void main() {
 
   float d = length(uv - vec2(0.5, 0.5));
   float d_in = pc.falloff_start;
-  float d_out = max(pc.falloff_start, pc.faloff_end);
+  float d_out = max(pc.falloff_start, pc.falloff_end);
   float t = clamp((d - d_in) / (d_out - d_in), 0.0, 1.0);
   float m = 1.0 - (3 * t * t - 2 * t * t * t);
 

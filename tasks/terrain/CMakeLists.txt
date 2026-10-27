@@ -5,6 +5,7 @@ add_executable(terrain
         WorldRenderer.cpp
         App.cpp
         PerlinNoiseGenerator.cpp
+        Landscape.cpp
 )
 
 target_link_libraries(terrain

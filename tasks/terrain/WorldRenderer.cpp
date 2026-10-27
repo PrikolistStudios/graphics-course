@@ -10,8 +10,6 @@
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
-  , noise_params({.octave_count = 6})
-  , noise_gen(noise_params)
 {
 }
 
@@ -46,9 +44,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
       .allocationCreate = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
       .name = "constants",
     });
-
-  noise_gen.init();
-  noise_tx = noise_gen.createImage({1024, 1024});
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -114,6 +109,8 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
           .depthAttachmentFormat = vk::Format::eD16Unorm,
         },
     });
+
+  landscape.init(swapchain_format);
 }
 
 void WorldRenderer::debugInput(const Keyboard& kb)
@@ -196,52 +193,18 @@ void WorldRenderer::renderWorld(vk::CommandBuffer cmd_buf, vk::Image target_imag
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderForward);
-
-    noise_gen.render(cmd_buf, noise_tx);
-    etna::flush_barriers(cmd_buf);
-    quadRenderer->render(cmd_buf, target_image, target_image_view, noise_tx, defaultSampler);
+    landscape.render(cmd_buf, target_image, target_image_view);
   }
-
-  // if (drawDebugFSQuad)
-  //   quadRenderer->render(cmd_buf, target_image, target_image_view, noise_tx, defaultSampler);
 }
 
 void WorldRenderer::drawGui()
 {
   ImGui::Begin("Simple render settings");
 
-  if (ImGui::CollapsingHeader("Perlin Noise Generator"))
+  if (ImGui::CollapsingHeader("Landscape"))
   {
-    int32_t octaveCount = noise_params.octave_count;
-    ImGui::SliderInt("Octave Count", &octaveCount, 1, 8);
-    noise_params.octave_count = octaveCount;
-
-    float lacunarity = noise_params.lacunarity;
-    ImGui::SliderFloat("Lacunarity", &lacunarity, 1.5f, 2.5f);
-    noise_params.lacunarity = lacunarity;
-
-    float gain = noise_params.gain;
-    ImGui::SliderFloat("Gain", &gain, 0.3f, 0.8f);
-    noise_params.gain = gain;
-
-    int32_t seed = noise_params.seed;
-    ImGui::InputInt("Seed", &seed);
-    noise_params.seed = seed;
-
-    float falloffStart = noise_params.faloff_start;
-    ImGui::SliderFloat("Falloff Start", &falloffStart, 0.0f, 1.0f);
-    noise_params.faloff_start = falloffStart;
-
-    float falloffEnd = noise_params.faloff_end;
-    ImGui::SliderFloat("Falloff End", &falloffEnd, 0.0f, 1.0f);
-    noise_params.faloff_end = falloffEnd;
-
-    noise_gen.updateParams(noise_params);
+    landscape.drawGui();
   }
-
-  // float color[3]{uniformParams.baseColor.r, uniformParams.baseColor.g, uniformParams.baseColor.b};
-  // ImGui::ColorEdit3("Meshes base color", color, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
-  // uniformParams.baseColor = {color[0], color[1], color[2]};
 
   float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
   ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);

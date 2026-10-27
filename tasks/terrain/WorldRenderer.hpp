@@ -12,7 +12,7 @@
 #include "wsi/Keyboard.hpp"
 
 #include "FramePacket.hpp"
-#include "PerlinNoiseGenerator.hpp"
+#include "Landscape.hpp"
 
 
 /**
@@ -79,7 +79,5 @@ private:
 
   glm::uvec2 resolution;
 
-  PerlinNoiseGenerator::Params noise_params;
-  PerlinNoiseGenerator noise_gen;
-  etna::Image noise_tx;
+  Landscape landscape;
 };

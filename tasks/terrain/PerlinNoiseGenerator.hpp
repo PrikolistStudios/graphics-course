@@ -11,6 +11,8 @@
 #include <etna/Image.hpp>
 #include <glm/vec2.hpp>
 
+#include "shaders/NoiseParams.h"
+
 class PerlinNoiseGenerator
 {
 public:
@@ -28,23 +30,15 @@ public:
 
   void init();
   etna::Image createImage(glm::uvec2 resolution);
-  void updateParams(const Params&);
+  void update(const Params&);
   void render(vk::CommandBuffer cmd_buf, const etna::Image& target_image);
 
 private:
-  struct PushConstants
-  {
-    glm::uvec2 resolution;
-    glm::vec2 invResolution;
-    glm::uint octave_count;
-    float lacunarity;
-    float gain;
-    glm::uint seed;
-    float faloff_start;
-    float faloff_end;
-  };
+  void convertParams(const Params& params);
+  void storeBuffer();
 
-  Params params;
+  NoiseParams params;
+  etna::Buffer params_buf;
   etna::Sampler sampler;
   etna::ComputePipeline pipeline;
 };
