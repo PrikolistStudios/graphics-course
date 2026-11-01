@@ -15,7 +15,7 @@ Landscape::Landscape(const Params& params)
   , transferHelper{etna::BlockingTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4}}
   , params(params)
   , newCellNum(params.cell_num)
-  , noise_params({.octave_count = 6})
+  , noise_params({.octave_count = 3, .lacunarity = 1.620f, .gain = 0.405f, .faloff_start = 0.336f, .faloff_end = 0.495f})
   , noise_gen(noise_params)
   , noise_tx()
 {

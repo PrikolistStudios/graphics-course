@@ -17,7 +17,7 @@ class Landscape
 public:
   struct Params
   {
-    glm::uint cell_num = 256;
+    glm::uint cell_num = 512;
     glm::float32 size = 10.f;
     glm::float32 height = 2.5f;
   };

@@ -14,18 +14,6 @@ layout(set = 0, binding = 1) uniform NoiseData {
   NoiseParams pc;
 };
 
-//layout(push_constant) uniform PushConstants
-//{
-//  uvec2 resolution;
-//  vec2 invResolution;
-//  uint octave_count;
-//  float lacunarity;
-//  float gain;
-//  uint seed;
-//  float falloff_start;
-//  float faloff_end;
-//} pc;
-
 const float noise_normalizer = sqrt(3.0) / 2.0;
 
 // fast high-quality hash https://www.shadertoy.com/view/wfVczm
@@ -69,7 +57,6 @@ float float_hash(uint int_hash) {
   uint mantissa = int_hash >> 9;
   uint b = 0x3F800000u | mantissa;
   return uintBitsToFloat(b) - 1.0;
-  //  return int_hash * (1.0 / 4294967296.0);
 }
 
 float fade(float value) {
@@ -86,17 +73,13 @@ vec3 gradient(uint h) {
   return gradients[int(h % 12u)];
 }
 
+// Generates perline noise from -1 to 1.
 float perlin(vec3 P, uint seed) {
   uvec3 base = uvec3(floor(P));
   float influence[8];
   for (int i = 0; i < 8; ++i) {
     uvec3 corner = base + uvec3(i & 1, sign(i & 2), sign(i & 4));
     uint cornerHash = hash(corner, seed);
-    //    float x = fma(float_hash(hash(corner, seed + 1)), 2.0, -1.0);
-    //    float y = fma(float_hash(hash(corner, seed + 2)), 2.0, -1.0);
-    //    float z = fma(float_hash(hash(corner, seed + 3)), 2.0, -1.0);
-    //
-    //    vec3 gradient = normalize(vec3(x, y, z));
     vec3 grad = normalize(gradient(cornerHash));
     vec3 offset = P - vec3(corner);
     influence[i] = dot(offset, grad);
@@ -141,6 +124,7 @@ void main() {
   float m = 1.0 - (3 * t * t - 2 * t * t * t);
 
   float result = noise * m;
+  result = mix(0.5, noise, m);
 
   imageStore(resultImage, ivec2(frag_coord), vec4(result, 0.0, 0.0, 1.0));
 }

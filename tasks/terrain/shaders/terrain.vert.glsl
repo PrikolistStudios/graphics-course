@@ -5,8 +5,6 @@
 #include "unpack_attributes.glsl"
 #include "LandscapeShaderParams.h"
 
-//layout(location = 0) in vec3 vPos;
-
 layout(push_constant) uniform params_t
 {
   mat4 mProjView;
@@ -32,7 +30,7 @@ out gl_PerVertex { vec4 gl_Position; };
 float height(vec2 P) {
   ivec2 texture_size = textureSize(height_map, 0);
   vec2 texPos = P / landscape_params.world_size;
-  return texture(height_map, texPos).x * landscape_params.world_height;
+  return (texture(height_map, texPos).x - 0.5) * landscape_params.world_height;
 }
 
 vec3 normal(vec2 P) {
