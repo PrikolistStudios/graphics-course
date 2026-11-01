@@ -13,6 +13,8 @@ target_link_libraries(terrain
 
 target_add_shaders(terrain
         shaders/perlin.comp.glsl
-        shaders/simple_shadow.frag.glsl
-        shaders/simple.vert.glsl
+        shaders/terrain.frag.glsl
+        shaders/terrain.vert.glsl
+        shaders/base.vert.glsl
+        shaders/base.frag.glsl
 )

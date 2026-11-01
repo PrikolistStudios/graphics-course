@@ -7,6 +7,7 @@
 #include "etna/Etna.hpp"
 #include "etna/PipelineManager.hpp"
 
+#include <imgui.h>
 #include <glm/vec3.hpp>
 
 PerlinNoiseGenerator::PerlinNoiseGenerator(const Params& params)
@@ -101,4 +102,32 @@ void PerlinNoiseGenerator::update(const Params& parameters)
 {
   convertParams(parameters);
   storeBuffer();
+}
+
+void PerlinNoiseGenerator::drawGUI(const std::string_view&)
+{
+  ImGui::Indent();
+
+  bool changed = false;
+  int32_t octaveCount = params.octave_count;
+  changed |= ImGui::SliderInt("Octave Count", &octaveCount, 1, 8);
+  params.octave_count = octaveCount;
+
+  changed |= ImGui::SliderFloat("Lacunarity", &params.lacunarity, 1.5f, 2.5f);
+
+  changed |= ImGui::SliderFloat("Gain", &params.gain, 0.3f, 0.8f);
+
+  int32_t seed = params.seed;
+  changed |= ImGui::InputInt("Seed", &seed);
+  params.seed = seed;
+
+  changed |= ImGui::SliderFloat("Falloff Start", &params.falloff_start, 0.0f, 1.0f);
+
+  changed |= ImGui::SliderFloat("Falloff End", &params.falloff_end, 0.0f, 1.0f);
+
+  if (changed)
+  {
+    storeBuffer();
+  }
+  ImGui::Unindent();
 }

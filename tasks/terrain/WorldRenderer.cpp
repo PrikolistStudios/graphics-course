@@ -10,6 +10,7 @@
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
+  , landscape({})
 {
 }
 
@@ -53,8 +54,8 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 
 void WorldRenderer::loadShaders()
 {
-  etna::create_program("simple_material", {TERRAIN_SHADERS_ROOT "simple_shadow.frag.spv", TERRAIN_SHADERS_ROOT "simple.vert.spv"});
-  etna::create_program("simple_shadow", {TERRAIN_SHADERS_ROOT "simple.vert.spv"});
+  etna::create_program("Base Layout Shader", {TERRAIN_SHADERS_ROOT "base.frag.glsl.spv", TERRAIN_SHADERS_ROOT "base.vert.glsl.spv"});
+  // etna::create_program("simple_shadow", {TERRAIN_SHADERS_ROOT "simple.vert.spv"});
 }
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
@@ -75,7 +76,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   basicForwardPipeline = {};
   basicForwardPipeline = pipelineManager.createGraphicsPipeline(
-    "simple_material",
+    "Base Layout Shader",
     etna::GraphicsPipeline::CreateInfo{
       .vertexShaderInput = sceneVertexInputDesc,
       .rasterizationConfig =
@@ -93,22 +94,22 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
     });
 
   shadowPipeline = {};
-  shadowPipeline = pipelineManager.createGraphicsPipeline(
-    "simple_shadow",
-    etna::GraphicsPipeline::CreateInfo{
-      .vertexShaderInput = sceneVertexInputDesc,
-      .rasterizationConfig =
-        vk::PipelineRasterizationStateCreateInfo{
-          .polygonMode = vk::PolygonMode::eFill,
-          .cullMode = vk::CullModeFlagBits::eBack,
-          .frontFace = vk::FrontFace::eCounterClockwise,
-          .lineWidth = 1.f,
-        },
-      .fragmentShaderOutput =
-        {
-          .depthAttachmentFormat = vk::Format::eD16Unorm,
-        },
-    });
+  // shadowPipeline = pipelineManager.createGraphicsPipeline(
+  //   "simple_shadow",
+  //   etna::GraphicsPipeline::CreateInfo{
+  //     .vertexShaderInput = sceneVertexInputDesc,
+  //     .rasterizationConfig =
+  //       vk::PipelineRasterizationStateCreateInfo{
+  //         .polygonMode = vk::PolygonMode::eFill,
+  //         .cullMode = vk::CullModeFlagBits::eBack,
+  //         .frontFace = vk::FrontFace::eCounterClockwise,
+  //         .lineWidth = 1.f,
+  //       },
+  //     .fragmentShaderOutput =
+  //       {
+  //         .depthAttachmentFormat = vk::Format::eD16Unorm,
+  //       },
+  //   });
 
   landscape.init(swapchain_format);
 }
@@ -193,13 +194,32 @@ void WorldRenderer::renderWorld(vk::CommandBuffer cmd_buf, vk::Image target_imag
 
   {
     ETNA_PROFILE_GPU(cmd_buf, renderForward);
-    landscape.render(cmd_buf, target_image, target_image_view);
+
+    pushConst2M.model = glm::identity<glm::mat4x4>();
+    pushConst2M.projView = worldViewProj;
+    cmd_buf.pushConstants<PushConstants>(basicForwardPipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eVertex, 0, {pushConst2M});
+
+    auto baseShaderInfo = etna::get_shader_program("Base Layout Shader");
+    auto set = etna::create_descriptor_set(
+      baseShaderInfo.getDescriptorLayoutId(0),
+      cmd_buf,
+      {etna::Binding{0, constants.genBinding()}});
+
+    cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, basicForwardPipeline.getVkPipelineLayout(), 0, {set.getVkSet()}, {});
+
+    landscape.render(
+      {.cmd_buf = cmd_buf,
+       .target_image = target_image,
+       .target_image_view = target_image_view,
+       .swapchain_resolution = resolution,
+       .main_view_depth = mainViewDepth});
   }
 }
 
 void WorldRenderer::drawGui()
 {
   ImGui::Begin("Simple render settings");
+  ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 5);
 
   if (ImGui::CollapsingHeader("Landscape"))
   {
@@ -215,5 +235,6 @@ void WorldRenderer::drawGui()
   ImGui::NewLine();
 
   ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Press 'B' to recompile and reload shaders");
+  ImGui::PopStyleVar(1);
   ImGui::End();
 }

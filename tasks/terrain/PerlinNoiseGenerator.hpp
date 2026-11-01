@@ -31,7 +31,9 @@ public:
   void init();
   etna::Image createImage(glm::uvec2 resolution);
   void update(const Params&);
+  void drawGUI(const std::string_view& name);
   void render(vk::CommandBuffer cmd_buf, const etna::Image& target_image);
+
 
 private:
   void convertParams(const Params& params);
