@@ -22,7 +22,7 @@ layout (location = 0) out VS_OUT
   vec3 wPos;
   vec3 wNorm;
 //  vec3 wTangent;
-//  vec2 texCoord;
+  vec2 tex_coord;
 } vOut;
 
 out gl_PerVertex { vec4 gl_Position; };
@@ -65,6 +65,8 @@ void main(void)
   vOut.wNorm = normalize(mat3(transpose(inverse(params.mModel))) * wNorm.xyz);
   //  vOut.wTangent = normalize(mat3(transpose(inverse(params.mModel))) * wTang.xyz);
   //  vOut.texCoord = vTexCoordAndTang.xy;
+  float tiling = 5.0;
+  vOut.tex_coord = P.xy / landscape_params.world_size * tiling;
 
   gl_Position = params.mProjView * vec4(vOut.wPos, 1.0);
 }

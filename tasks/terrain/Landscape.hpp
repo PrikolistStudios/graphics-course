@@ -26,9 +26,6 @@ public:
   void init(vk::Format swapchain_format);
   void render(const RenderContext& ctx);
   void drawGui();
-  void updateVertShader();
-
-  void regenerateIBuf();
 
 private:
   struct Vertex
@@ -36,14 +33,39 @@ private:
     glm::vec3 position;
   };
 
+  enum TextureType
+  {
+    BaseColor,
+    Roughness,
+    HeightMap,
+    NormalMap,
+  };
 
-  std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
-  etna::BlockingTransferHelper transferHelper;
+  struct BasicPBR
+  {
+    etna::Image base_color;
+    etna::Image roughness;
+    etna::Image heightmap;
+  };
+
+  void regenerateIBuf();
+  void updateVertShader();
+  void loadTextures();
+  etna::Image loadTexture(const std::string_view& path, TextureType textureType);
+
+  std::unique_ptr<etna::OneShotCmdMgr> one_shot_commands;
+  etna::BlockingTransferHelper transfer_helper;
 
   Params params;
   int newCellNum;
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
+
+  BasicPBR grass;
+  BasicPBR rock;
+  BasicPBR sand;
+  BasicPBR snow;
+  std::vector<etna::Binding> textures_bindings;
 
   PerlinNoiseGenerator::Params noise_params;
   PerlinNoiseGenerator noise_gen;

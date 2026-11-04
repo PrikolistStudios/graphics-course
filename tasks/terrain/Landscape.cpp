@@ -8,17 +8,32 @@
 #include "etna/Profiling.hpp"
 #include "etna/RenderTargetStates.hpp"
 
+// #define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <imgui.h>
+#include <iostream>
 
 Landscape::Landscape(const Params& params)
-  : oneShotCommands{etna::get_context().createOneShotCmdMgr()}
-  , transferHelper{etna::BlockingTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4}}
+  : one_shot_commands{etna::get_context().createOneShotCmdMgr()}
+  , transfer_helper{etna::BlockingTransferHelper::CreateInfo{.stagingSize = 4096 * 4096 * 4}}
   , params(params)
   , newCellNum(params.cell_num)
   , noise_params({.octave_count = 3, .lacunarity = 1.620f, .gain = 0.405f, .faloff_start = 0.336f, .faloff_end = 0.495f})
   , noise_gen(noise_params)
   , noise_tx()
 {
+}
+
+std::vector<etna::Binding> createTexturesBindings(const etna::Sampler& sampler, const std::vector<etna::Image*>& textures)
+{
+  std::vector<etna::Binding> res;
+  for (size_t i = 0; i < textures.size(); i++)
+  {
+    res.emplace_back(i, textures[i]->genBinding(sampler.get(), vk::ImageLayout::eReadOnlyOptimal, {}));
+  }
+
+  return res;
 }
 
 void Landscape::init(vk::Format swapchain_format)
@@ -30,7 +45,11 @@ void Landscape::init(vk::Format swapchain_format)
 
   noise_gen.init();
   noise_tx = noise_gen.createImage({1024, 1024});
-  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{.name = "default_sampler"});
+
+  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .addressMode = vk::SamplerAddressMode::eRepeat,
+    .name = "default_sampler"
+  });
 
   etna::create_program("Landscape Shader", {TERRAIN_SHADERS_ROOT "terrain.vert.glsl.spv", TERRAIN_SHADERS_ROOT "terrain.frag.glsl.spv"});
 
@@ -53,6 +72,23 @@ void Landscape::init(vk::Format swapchain_format)
     });
 
   regenerateIBuf();
+  loadTextures();
+  textures_bindings = createTexturesBindings(
+    defaultSampler,
+    {
+      &grass.base_color,
+      &grass.roughness,
+      &grass.heightmap,
+      &rock.base_color,
+      &rock.roughness,
+      &rock.heightmap,
+      &sand.base_color,
+      &sand.roughness,
+      &sand.heightmap,
+      &snow.base_color,
+      &snow.roughness,
+      &snow.heightmap,
+    });
 }
 
 void Landscape::render(const RenderContext& ctx)
@@ -79,6 +115,8 @@ void Landscape::render(const RenderContext& ctx)
       {etna::Binding{0, noise_tx.genBinding(defaultSampler.get(), vk::ImageLayout::eReadOnlyOptimal, {})},
        etna::Binding{1, vert_shader_params_buf.genBinding()}});
 
+    auto texturesSet = etna::create_descriptor_set(shaderInfo.getDescriptorLayoutId(2), ctx.cmd_buf, textures_bindings);
+
     etna::RenderTargetState renderTargets(
       ctx.cmd_buf,
       {{0, 0}, {ctx.swapchain_resolution.x, ctx.swapchain_resolution.y}},
@@ -86,7 +124,7 @@ void Landscape::render(const RenderContext& ctx)
       {.image = ctx.main_view_depth.get(), .view = ctx.main_view_depth.getView({})});
 
     ctx.cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getVkPipeline());
-    ctx.cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline.getVkPipelineLayout(), 1, {set.getVkSet()}, {});
+    ctx.cmd_buf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline.getVkPipelineLayout(), 1, {set.getVkSet(), texturesSet.getVkSet()}, {});
     ctx.cmd_buf.bindIndexBuffer(index_buffer.get(), 0, vk::IndexType::eUint32);
 
     etna::flush_barriers(ctx.cmd_buf);
@@ -146,6 +184,80 @@ void Landscape::updateVertShader()
   }
 
   std::memcpy(vert_shader_params_buf.data(), &shaderData, sizeof(shaderData));
+}
+
+void Landscape::loadTextures()
+{
+  grass.base_color = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/grass/sparse_grass_diff_1k.png", BaseColor);
+  grass.roughness = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/grass/sparse_grass_rough_1k.png", Roughness);
+  grass.heightmap = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/grass/sparse_grass_disp_1k.png", HeightMap);
+
+  rock.base_color = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/rock/rock_06_diff_1k.png", BaseColor);
+  rock.roughness = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/rock/rock_06_rough_1k.png", Roughness);
+  rock.heightmap = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/rock/rock_06_disp_1k.png", HeightMap);
+
+  sand.base_color = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/sand/sand_03_diff_1k.png", BaseColor);
+  sand.roughness = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/sand/sand_03_rough_1k.png", Roughness);
+  sand.heightmap = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/sand/sand_03_disp_1k.png", HeightMap);
+
+  snow.base_color = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/snow/snow_01_diff_1k.png", BaseColor);
+  snow.roughness = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/snow/snow_01_rough_1k.png", Roughness);
+  snow.heightmap = loadTexture(GRAPHICS_COURSE_RESOURCES_ROOT "/terrain/snow/snow_01_disp_1k.png", HeightMap);
+}
+
+etna::Image Landscape::loadTexture(const std::string_view& path, TextureType texture_type)
+{
+  int desiredChannels = STBI_default;
+  int bytesPerPixel = 4;
+  vk::Format textureFormat = {};
+  if (texture_type == BaseColor)
+  {
+    desiredChannels = STBI_rgb_alpha;
+    textureFormat = vk::Format::eR8G8B8A8Srgb;
+    bytesPerPixel = 4;
+  }
+  else if (texture_type == Roughness)
+  {
+    desiredChannels = STBI_rgb_alpha;
+    textureFormat = vk::Format::eR8G8B8A8Srgb;
+    bytesPerPixel = 4;
+  }
+  else if (texture_type == HeightMap)
+  {
+    desiredChannels = STBI_grey;
+    textureFormat = vk::Format::eR16Unorm;
+    bytesPerPixel = 2;
+  }
+  // desiredChannels = STBI_default;
+
+  int texWidth, texHeight, texChannels;
+  std::byte* pixels;
+
+  if (texture_type == HeightMap)
+  {
+    pixels = reinterpret_cast<std::byte*>(stbi_load_16(path.data(), &texWidth, &texHeight, &texChannels, desiredChannels));
+  }
+  else
+  {
+    pixels = reinterpret_cast<std::byte*>(stbi_load(path.data(), &texWidth, &texHeight, &texChannels, desiredChannels));
+  }
+
+  if (pixels == nullptr)
+  {
+    throw std::runtime_error("Failed to load texture image!");
+  }
+
+  auto res = etna::get_context().createImage(
+    {.extent = {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1},
+     .name = path.data(),
+     .format = textureFormat,
+     .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY});
+
+  auto pixelsSpan = std::span(pixels, texWidth * texHeight * bytesPerPixel);
+  transfer_helper.uploadImage(*one_shot_commands, res, 0, 0, pixelsSpan);
+  stbi_image_free(pixels);
+  return res;
 }
 
 void Landscape::regenerateIBuf()

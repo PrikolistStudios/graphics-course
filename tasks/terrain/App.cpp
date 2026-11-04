@@ -4,6 +4,8 @@
 
 #include "gui/ImGuiRenderer.hpp"
 
+#include <iostream>
+
 
 App::App()
 {
@@ -42,6 +44,8 @@ App::App()
 
   shadowCam.lookAt({-8, 10, 8}, {0, 0, 0}, {0, 1, 0});
   mainCam.lookAt({0, 0, 5}, {5, 5, 0}, {0, 0, 1});
+  std::cout << mainCam.position.x << ' ' << mainCam.position.y << ' ' << mainCam.position.z << std::endl;
+
 
   renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/low_poly_dark_town/scene.gltf");
 }
@@ -83,7 +87,7 @@ void App::processInput(float dt)
   if (mainWindow->mouse[MouseButton::mbRight] == ButtonState::Rising)
     mainWindow->captureMouse = !mainWindow->captureMouse;
 
-  auto& camToControl = controlShadowCam ? shadowCam : mainCam;
+  auto& camToControl = mainCam;
 
   moveCam(camToControl, mainWindow->keyboard, dt);
   if (mainWindow->captureMouse)

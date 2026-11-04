@@ -6,6 +6,7 @@
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
 #include <imgui.h>
+#include <iostream>
 
 
 WorldRenderer::WorldRenderer()
@@ -93,24 +94,6 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
         },
     });
 
-  shadowPipeline = {};
-  // shadowPipeline = pipelineManager.createGraphicsPipeline(
-  //   "simple_shadow",
-  //   etna::GraphicsPipeline::CreateInfo{
-  //     .vertexShaderInput = sceneVertexInputDesc,
-  //     .rasterizationConfig =
-  //       vk::PipelineRasterizationStateCreateInfo{
-  //         .polygonMode = vk::PolygonMode::eFill,
-  //         .cullMode = vk::CullModeFlagBits::eBack,
-  //         .frontFace = vk::FrontFace::eCounterClockwise,
-  //         .lineWidth = 1.f,
-  //       },
-  //     .fragmentShaderOutput =
-  //       {
-  //         .depthAttachmentFormat = vk::Format::eD16Unorm,
-  //       },
-  //   });
-
   landscape.init(swapchain_format);
 }
 
@@ -148,9 +131,10 @@ void WorldRenderer::update(const FramePacket& packet)
   // Upload everything to GPU-mapped memory
   {
     uniformParams.lightMatrix = lightMatrix;
-    uniformParams.lightPos = lightPos;
+    uniformParams.lightPos = glm::vec4(lightPos, 1.0);
     uniformParams.time = packet.currentTime;
-
+    uniformParams.cam_pos = glm::vec4(packet.mainCam.position, 1.0);
+    std::cout << uniformParams.cam_pos.x << ' ' << uniformParams.cam_pos.y << ' ' << uniformParams.cam_pos.z << std::endl;
     std::memcpy(constants.data(), &uniformParams, sizeof(uniformParams));
   }
 }
@@ -228,7 +212,7 @@ void WorldRenderer::drawGui()
 
   float pos[3]{uniformParams.lightPos.x, uniformParams.lightPos.y, uniformParams.lightPos.z};
   ImGui::SliderFloat3("Light source position", pos, -10.f, 10.f);
-  uniformParams.lightPos = {pos[0], pos[1], pos[2]};
+  uniformParams.lightPos = {pos[0], pos[1], pos[2], 1.0};
 
   ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 

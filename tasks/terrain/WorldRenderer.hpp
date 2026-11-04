@@ -67,12 +67,13 @@ private:
   UniformParams uniformParams{
     .lightMatrix = {},
     .lightPos = {},
+    .baseColor = {0.9f, 0.92f, 1.0f, 1.0},
+    .cam_pos = {},
     .time = {},
-    .baseColor = {0.9f, 0.92f, 1.0f},
+    ._pad = {}
   };
 
   etna::GraphicsPipeline basicForwardPipeline{};
-  etna::GraphicsPipeline shadowPipeline{};
 
   std::unique_ptr<QuadRenderer> quadRenderer;
   bool drawDebugFSQuad = false;
